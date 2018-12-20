@@ -1,13 +1,16 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	vault "github.com/hashicorp/vault/api"
 	"gopkg.in/urfave/cli.v1"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"sync"
+	"time"
 )
 
 func main() {
@@ -22,18 +25,22 @@ func main() {
 
 	loginVault()
 
+	concurrency := make(chan int, concurrency)
+
 	wg := sync.WaitGroup{}
 	wg.Add(loopCount)
 	for i := 0; i < loopCount; i++ {
-		go getDbCred(&wg)
+		go getDbCred(&wg, concurrency)
 	}
 	wg.Wait()
+	close(concurrency)
 }
 
 var vaultUrl string
 var vaultRole string
 var dbRole string
 var loopCount int
+var concurrency int
 var tlsConf = &vault.TLSConfig{Insecure: true}
 
 var vaultClient = &vault.Client{}
@@ -59,10 +66,16 @@ func argsParserSetup() *cli.App {
 			Destination: &dbRole,
 		},
 		cli.IntFlag{
-			Name:        "count,c",
+			Name:        "count",
 			Usage:       "How many credential is go to obtain",
 			Value:       1,
 			Destination: &loopCount,
+		},
+		cli.IntFlag{
+			Name:        "concurrency",
+			Usage:       "How many concurrency",
+			Value:       10,
+			Destination: &concurrency,
 		},
 	}
 	app.HideVersion = true
@@ -104,15 +117,19 @@ func loginVault() {
 	vaultClient = client
 }
 
-func getDbCred(wg *sync.WaitGroup) {
+func getDbCred(wg *sync.WaitGroup, concurrency chan int) {
+	concurrency <- 0
+
 	logical := vaultClient.Logical()
 	//lo := vaultClient.NewRequest("GET", )
 
 	result, err := logical.Read(fmt.Sprintf("/database/creds/%s", dbRole))
 	if err != nil {
-		log.Fatalf("Read DB credential error: %s\n", err)
-	}
+		log.Printf("Read DB credential error: %s\n", err)
 
-	log.Println("DB: ", result.Data)
+	} else {
+		log.Println("DB: ", result.Data)
+	}
+	<-concurrency
 	wg.Done()
 }
