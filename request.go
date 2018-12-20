@@ -1,16 +1,13 @@
 package main
 
 import (
-	"crypto/tls"
 	"fmt"
 	vault "github.com/hashicorp/vault/api"
 	"gopkg.in/urfave/cli.v1"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"sync"
-	"time"
 )
 
 func main() {
@@ -121,7 +118,6 @@ func getDbCred(wg *sync.WaitGroup, concurrency chan int) {
 	concurrency <- 0
 
 	logical := vaultClient.Logical()
-	//lo := vaultClient.NewRequest("GET", )
 
 	result, err := logical.Read(fmt.Sprintf("/database/creds/%s", dbRole))
 	if err != nil {
