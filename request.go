@@ -22,7 +22,7 @@ func main() {
 	log.Printf("V: %s, R: %s, D: %s\n", vaultUrl, vaultRole, dbRole)
 
 	loginVault()
-	log.Printf("Token duration: %d, Loop count: %d, Concurrency: %d\n", tokenDuration, loopCount, concurrency)
+	log.Printf("Loop count: %d, Concurrency: %d\n", loopCount, concurrency)
 
 	concurrency := make(chan int, concurrency)
 
@@ -45,7 +45,7 @@ func main() {
 				}
 			}
 
-			if tokenDuration < 600 {
+			if tokenExpire.Sub(time.Now()).Seconds() < 600 {
 				loginVault()
 				log.Println("Vault token renewed.")
 			}
@@ -76,7 +76,7 @@ func (a *lockCounter) addCount(n int) {
 }
 
 var remaining lockCounter
-var tokenDuration int
+var tokenExpire time.Time
 
 var vaultUrl string
 var vaultRole string
@@ -155,7 +155,7 @@ func loginVault() {
 		log.Fatalf("Login error: %s\n", err)
 	}
 	client.SetToken(secret.Auth.ClientToken)
-	tokenDuration = secret.Auth.LeaseDuration
+	tokenExpire = time.Now().Add(time.Duration(time.Duration(secret.Auth.LeaseDuration) * time.Second))
 
 	vaultClient = client
 }
