@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 )
 
 func main() {
@@ -21,17 +22,61 @@ func main() {
 	log.Printf("V: %s, R: %s, D: %s\n", vaultUrl, vaultRole, dbRole)
 
 	loginVault()
+	log.Printf("Token duration: %d, Loop count: %d, Concurrency: %d\n", tokenDuration, loopCount, concurrency)
 
 	concurrency := make(chan int, concurrency)
 
-	wg := sync.WaitGroup{}
-	wg.Add(loopCount)
-	for i := 0; i < loopCount; i++ {
-		go getDbCred(&wg, concurrency)
+	if loopCount > 0 {
+		wg := sync.WaitGroup{}
+
+		wg.Add(loopCount)
+		for i := 0; i < loopCount; i++ {
+			go getDbCred(&wg, concurrency)
+		}
+		wg.Wait()
+		close(concurrency)
+	} else {
+		for {
+			if count := remaining.getCount(); count < 5000 {
+				log.Println(count, " request left. Add 5000 request to go routine.")
+				remaining.addCount(5000)
+				for i := 0; i < 5000; i++ {
+					go getDbCred(nil, concurrency)
+				}
+			}
+
+			if tokenDuration < 600 {
+				loginVault()
+				log.Println("Vault token renewed.")
+			}
+
+			time.Sleep(1 * time.Second)
+		}
+
 	}
-	wg.Wait()
-	close(concurrency)
 }
+
+type lockCounter struct {
+	sync.Mutex
+	count int
+}
+
+func (a *lockCounter) getCount() int {
+	a.Lock()
+	defer a.Unlock()
+
+	return a.count
+}
+
+func (a *lockCounter) addCount(n int) {
+	a.Lock()
+	defer a.Unlock()
+
+	a.count = a.count + n
+}
+
+var remaining lockCounter
+var tokenDuration int
 
 var vaultUrl string
 var vaultRole string
@@ -110,6 +155,7 @@ func loginVault() {
 		log.Fatalf("Login error: %s\n", err)
 	}
 	client.SetToken(secret.Auth.ClientToken)
+	tokenDuration = secret.Auth.LeaseDuration
 
 	vaultClient = client
 }
@@ -119,13 +165,16 @@ func getDbCred(wg *sync.WaitGroup, concurrency chan int) {
 
 	logical := vaultClient.Logical()
 
-	result, err := logical.Read(fmt.Sprintf("/database/creds/%s", dbRole))
+	_, err := logical.Read(fmt.Sprintf("/database/creds/%s", dbRole))
 	if err != nil {
 		log.Printf("Read DB credential error: %s\n", err)
 
-	} else {
-		log.Println("DB: ", result.Data)
 	}
 	<-concurrency
-	wg.Done()
+
+	if wg != nil {
+		wg.Done()
+	} else {
+		remaining.addCount(-1)
+	}
 }
