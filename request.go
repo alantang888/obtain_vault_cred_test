@@ -136,7 +136,10 @@ func argsHandler(c *cli.Context) error {
 
 func loginVault() {
 	vaultConfig := &vault.Config{Address: vaultUrl}
-	vaultConfig.ConfigureTLS(tlsConf)
+	configErr := vaultConfig.ConfigureTLS(tlsConf)
+	if configErr != nil {
+		log.Fatalf("Config vault TLS error: %s\n", configErr)
+	}
 	client, err := vault.NewClient(vaultConfig)
 	if err != nil {
 		log.Fatalf("Create vault client error: %s\n", err)
@@ -167,7 +170,7 @@ func getDbCred(wg *sync.WaitGroup, concurrency chan int) {
 
 	_, err := logical.Read(fmt.Sprintf("/database/creds/%s", dbRole))
 	if err != nil {
-		log.Printf("Read DB credential error: %s\n", err)
+		log.Fatalf("Read DB credential error: %s\n", err)
 
 	}
 	<-concurrency
