@@ -35,7 +35,10 @@ func main() {
 		}
 		wg.Wait()
 		close(concurrency)
+		log.Printf("Request is done. Sleep %d seconds.\n", sleepSecond)
 		time.Sleep(time.Duration(sleepSecond) * time.Second)
+		log.Println("Program exit.")
+		os.Exit(0)
 	} else {
 		for {
 			if count := remaining.getCount(); count < 5000 {
@@ -122,7 +125,7 @@ func argsParserSetup() *cli.App {
 			Destination: &concurrency,
 		},
 		cli.IntFlag{
-			Name:        "sleepSecond",
+			Name:        "sleep",
 			Usage:       "How many second it sleepSecond before exit.",
 			Value:       0,
 			Destination: &sleepSecond,
