@@ -35,6 +35,7 @@ func main() {
 		}
 		wg.Wait()
 		close(concurrency)
+		time.Sleep(time.Duration(sleepSecond) * time.Second)
 	} else {
 		for {
 			if count := remaining.getCount(); count < 5000 {
@@ -83,6 +84,7 @@ var vaultRole string
 var dbRole string
 var loopCount int
 var concurrency int
+var sleepSecond int
 var tlsConf = &vault.TLSConfig{Insecure: true}
 
 var vaultClient = &vault.Client{}
@@ -118,6 +120,12 @@ func argsParserSetup() *cli.App {
 			Usage:       "How many concurrency",
 			Value:       10,
 			Destination: &concurrency,
+		},
+		cli.IntFlag{
+			Name:        "sleepSecond",
+			Usage:       "How many second it sleepSecond before exit.",
+			Value:       0,
+			Destination: &sleepSecond,
 		},
 	}
 	app.HideVersion = true
