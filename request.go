@@ -19,27 +19,25 @@ func main() {
 		log.Fatalf("Parse args error: ", err.Error())
 	}
 
-	log.Printf("V: %s, R: %s, D: %s\n", vaultUrl, vaultRole, dbRole)
+	log.Printf("V: %s, R: %s, D: %s, Forever: %t\n", vaultUrl, vaultRole, dbRole, runForever)
 
 	loginVault()
 	log.Printf("Loop count: %d, Concurrency: %d\n", loopCount, concurrency)
 
-	concurrency := make(chan int, concurrency)
-
 	if loopCount > 0 {
-		wg := sync.WaitGroup{}
+		for {
+			makeLimitedRequests()
 
-		wg.Add(loopCount)
-		for i := 0; i < loopCount; i++ {
-			go getDbCred(&wg, concurrency)
+			if !runForever {
+				log.Println("Not run forever")
+				break
+			}
+			loginVault()
 		}
-		wg.Wait()
-		close(concurrency)
-		log.Printf("Request is done. Sleep %d seconds.\n", sleepSecond)
-		time.Sleep(time.Duration(sleepSecond) * time.Second)
 		log.Println("Program exit.")
 		os.Exit(0)
 	} else {
+		concurrency := make(chan int, concurrency)
 		for {
 			if count := remaining.getCount(); count < 5000 {
 				log.Println(count, " request left. Add 5000 request to go routine.")
@@ -58,6 +56,19 @@ func main() {
 		}
 
 	}
+}
+
+func makeLimitedRequests() {
+	concurrency := make(chan int, concurrency)
+	wg := sync.WaitGroup{}
+	wg.Add(loopCount)
+	for i := 0; i < loopCount; i++ {
+		go getDbCred(&wg, concurrency)
+	}
+	wg.Wait()
+	close(concurrency)
+	log.Printf("Request is done. Sleep %d seconds.\n", sleepSecond)
+	time.Sleep(time.Duration(sleepSecond) * time.Second)
 }
 
 type lockCounter struct {
@@ -88,6 +99,7 @@ var dbRole string
 var loopCount int
 var concurrency int
 var sleepSecond int
+var runForever bool
 var tlsConf = &vault.TLSConfig{Insecure: true}
 
 var vaultClient = &vault.Client{}
@@ -129,6 +141,11 @@ func argsParserSetup() *cli.App {
 			Usage:       "How many second it sleepSecond before exit.",
 			Value:       0,
 			Destination: &sleepSecond,
+		},
+		cli.BoolFlag{
+			Name:        "forever",
+			Usage:       "Let program run forever",
+			Destination: &runForever,
 		},
 	}
 	app.HideVersion = true
